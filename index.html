@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone Delivery Dash</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 50%, #B0E0E6 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 30%, #B0E0E6 60%, #87CEEB 100%);
+            border: 3px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .city-bg {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 150px;
+            background: linear-gradient(to top, #2c3e50 0%, #34495e 50%, #5a6c7d 100%);
+        }
+        
+        .building {
+            position: absolute;
+            bottom: 0;
+            background: linear-gradient(to top, #2c3e50, #34495e);
+            border-top: 3px solid #f39c12;
+        }
+        
+        .cloud {
+            position: absolute;
+            background: #ecf0f1;
+            border-radius: 50px;
+            opacity: 0.8;
+        }
+        
+        .cloud::before,
+        .cloud::after {
+            content: '';
+            position: absolute;
+            background: #ecf0f1;
+            border-radius: 50px;
+        }
+        
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: pointer;
+        }
+        
+        .score {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.8);
+            z-index: 10;
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(44, 62, 80, 0.95);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+            z-index: 20;
+        }
+        
+        .game-over h2 {
+            margin: 0 0 10px 0;
+            color: #e74c3c;
+        }
+        
+        .restart-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: background 0.3s;
+        }
+        
+        .restart-btn:hover {
+            background: #2980b9;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #2c3e50;
+            text-align: center;
+            font-size: 14px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="city-bg"></div>
+        
+        <!-- Background buildings -->
+        <div class="building" style="left: 100px; width: 80px; height: 120px;"></div>
+        <div class="building" style="left: 220px; width: 60px; height: 90px;"></div>
+        <div class="building" style="left: 320px; width: 100px; height: 140px;"></div>
+        <div class="building" style="left: 480px; width: 70px; height: 110px;"></div>
+        <div class="building" style="left: 600px; width: 90px; height: 130px;"></div>
+        
+        <!-- Background clouds -->
+        <div class="cloud" style="top: 80px; left: 150px; width: 80px; height: 40px;">
+            <div style="position: absolute; top: -20px; left: 20px; width: 50px; height: 50px; background: #ecf0f1; border-radius: 50%;"></div>
+            <div style="position: absolute; top: -15px; left: -10px; width: 40px; height: 40px; background: #ecf0f1; border-radius: 50%;"></div>
+        </div>
+        
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div class="score" id="score">Score: 0</div>
+        
+        <div class="game-over" id="gameOver">
+            <h2>Game Over!</h2>
+            <p>Your drone crashed!</p>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button class="restart-btn" onclick="restartGame()">Try Again</button>
+        </div>
+        
+        <div class="instructions">
+            Click or press SPACE to fly up • Collect packages • Avoid obstacles!
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game state
+        let gameRunning = true;
+        let score = 0;
+        let gameSpeed = 2;
+        
+        // Drone properties
+        const drone = {
+            x: 100,
+            y: 300,
+            width: 40,
+            height: 30,
+            velocity: 0,
+            gravity: 0.5,
+            jumpPower: -8,
+            rotation: 0
+        };
+        
+        // Game objects arrays
+        let obstacles = [];
+        let packages = [];
+        let particles = [];
+        
+        // Obstacle types
+        const obstacleTypes = {
+            SKYSCRAPER: 'skyscraper',
+            WIRE: 'wire',
+            STORM_CLOUD: 'storm_cloud'
+        };
+        
+        let lastObstacleTime = 0;
+        let lastPackageTime = 0;
+        
+        function drawDrone() {
+            ctx.save();
+            ctx.translate(drone.x + drone.width/2, drone.y + drone.height/2);
+            ctx.rotate(drone.rotation);
+            
+            // Spinning propeller animation
+            const propellerRotation = (Date.now() * 0.01) % (Math.PI * 2);
+            
+            // Propeller arms
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-18, -8);
+            ctx.lineTo(18, -8);
+            ctx.moveTo(0, -18);
+            ctx.lineTo(0, 2);
+            ctx.stroke();
+            
+            // Front left propeller
+            ctx.save();
+            ctx.translate(-15, -12);
+            ctx.rotate(propellerRotation);
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-8, 0);
+            ctx.lineTo(8, 0);
+            ctx.moveTo(0, -8);
+            ctx.lineTo(0, 8);
+            ctx.stroke();
+            ctx.restore();
+            
+            // Front right propeller
+            ctx.save();
+            ctx.translate(15, -12);
+            ctx.rotate(-propellerRotation);
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-8, 0);
+            ctx.lineTo(8, 0);
+            ctx.moveTo(0, -8);
+            ctx.lineTo(0, 8);
+            ctx.stroke();
+            ctx.restore();
+            
+            // Rear left propeller
+            ctx.save();
+            ctx.translate(-15, 8);
+            ctx.rotate(-propellerRotation);
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-8, 0);
+            ctx.lineTo(8, 0);
+            ctx.moveTo(0, -8);
+            ctx.lineTo(0, 8);
+            ctx.stroke();
+            ctx.restore();
+            
+            // Rear right propeller
+            ctx.save();
+            ctx.translate(15, 8);
+            ctx.rotate(propellerRotation);
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-8, 0);
+            ctx.lineTo(8, 0);
+            ctx.moveTo(0, -8);
+            ctx.lineTo(0, 8);
+            ctx.stroke();
+            ctx.restore();
+            
+            // Drone main body (rounded)
+            ctx.fillStyle = '#34495e';
+            ctx.beginPath();
+            ctx.roundRect(-12, -6, 24, 12, 3);
+            ctx.fill();
+            
+            // Drone top section
+            ctx.fillStyle = '#3498db';
+            ctx.beginPath();
+            ctx.roundRect(-10, -5, 20, 8, 2);
+            ctx.fill();
+            
+            // Camera gimbal
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.arc(0, 4, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Camera lens
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath();
+            ctx.arc(0, 4, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // LED lights
+            ctx.fillStyle = drone.velocity < 0 ? '#2ecc71' : '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(-8, 0, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#f39c12';
+            ctx.beginPath();
+            ctx.arc(8, 0, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        function drawObstacle(obstacle) {
+            if (obstacle.type === obstacleTypes.SKYSCRAPER) {
+                // Top building
+                if (obstacle.hasTop) {
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.fillRect(obstacle.x, 0, obstacle.width, obstacle.topHeight);
+                    ctx.fillStyle = '#f39c12';
+                    ctx.fillRect(obstacle.x, obstacle.topHeight - 3, obstacle.width, 3);
+                }
+                
+                // Bottom building
+                if (obstacle.hasBottom) {
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.fillRect(obstacle.x, canvas.height - obstacle.bottomHeight, obstacle.width, obstacle.bottomHeight);
+                    ctx.fillStyle = '#f39c12';
+                    ctx.fillRect(obstacle.x, canvas.height - obstacle.bottomHeight, obstacle.width, 3);
+                }
+            } else if (obstacle.type === obstacleTypes.WIRE) {
+                ctx.strokeStyle = '#34495e';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(obstacle.x, obstacle.y);
+                ctx.lineTo(obstacle.x + obstacle.width, obstacle.y);
+                ctx.stroke();
+                
+                // Wire posts
+                ctx.fillStyle = '#34495e';
+                ctx.fillRect(obstacle.x - 3, obstacle.y - 20, 6, 40);
+                ctx.fillRect(obstacle.x + obstacle.width - 3, obstacle.y - 20, 6, 40);
+            } else if (obstacle.type === obstacleTypes.STORM_CLOUD) {
+                ctx.fillStyle = '#7f8c8d';
+                ctx.beginPath();
+                ctx.arc(obstacle.x + 30, obstacle.y + 20, 25, 0, Math.PI * 2);
+                ctx.arc(obstacle.x + 50, obstacle.y + 15, 30, 0, Math.PI * 2);
+                ctx.arc(obstacle.x + 75, obstacle.y + 20, 25, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Lightning effect
+                if (Math.random() < 0.1) {
+                    ctx.strokeStyle = '#f1c40f';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(obstacle.x + 50, obstacle.y + 35);
+                    ctx.lineTo(obstacle.x + 45, obstacle.y + 50);
+                    ctx.lineTo(obstacle.x + 55, obstacle.y + 50);
+                    ctx.lineTo(obstacle.x + 50, obstacle.y + 65);
+                    ctx.stroke();
+                }
+            }
+        }
+        
+        function drawPackage(pkg) {
+            // Package glow effect
+            ctx.save();
+            ctx.shadowColor = '#f39c12';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            
+            // Outer glow ring
+            const pulseSize = 2 + Math.sin(pkg.x * 0.1 + Date.now() * 0.005) * 1;
+            ctx.fillStyle = 'rgba(243, 156, 18, 0.3)';
+            ctx.beginPath();
+            ctx.roundRect(pkg.x - pulseSize, pkg.y - pulseSize, pkg.width + pulseSize * 2, pkg.height + pulseSize * 2, 3);
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // 3D Package effect - back face (darker)
+            ctx.fillStyle = '#d35400';
+            ctx.beginPath();
+            ctx.roundRect(pkg.x + 2, pkg.y - 2, pkg.width, pkg.height, 2);
+            ctx.fill();
+            
+            // 3D Package effect - side face
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.moveTo(pkg.x + pkg.width, pkg.y);
+            ctx.lineTo(pkg.x + pkg.width + 2, pkg.y - 2);
+            ctx.lineTo(pkg.x + pkg.width + 2, pkg.y + pkg.height - 2);
+            ctx.lineTo(pkg.x + pkg.width, pkg.y + pkg.height);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 3D Package effect - top face
+            ctx.fillStyle = '#f39c12';
+            ctx.beginPath();
+            ctx.moveTo(pkg.x, pkg.y);
+            ctx.lineTo(pkg.x + 2, pkg.y - 2);
+            ctx.lineTo(pkg.x + pkg.width + 2, pkg.y - 2);
+            ctx.lineTo(pkg.x + pkg.width, pkg.y);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Main package face
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.roundRect(pkg.x, pkg.y, pkg.width, pkg.height, 2);
+            ctx.fill();
+            
+            // Package tape - horizontal
+            ctx.fillStyle = '#c0392b';
+            ctx.beginPath();
+            ctx.roundRect(pkg.x, pkg.y + pkg.height/2 - 2, pkg.width, 4, 1);
+            ctx.fill();
+            
+            // Package tape - vertical
+            ctx.fillStyle = '#c0392b';
+            ctx.beginPath();
+            ctx.roundRect(pkg.x + pkg.width/2 - 2, pkg.y, 4, pkg.height, 1);
+            ctx.fill();
+            
+            // Highlight on package
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.beginPath();
+            ctx.roundRect(pkg.x + 2, pkg.y + 2, pkg.width - 8, 4, 1);
+            ctx.fill();
+            
+            // Floating animation
+            pkg.y += Math.sin(pkg.x * 0.01 + Date.now() * 0.003) * 0.5;
+        }
+        
+        function createObstacle() {
+            const now = Date.now();
+            if (now - lastObstacleTime < 2000) return;
+            
+            const type = Math.random();
+            let obstacle;
+            
+            if (type < 0.5) {
+                // Skyscraper
+                const gapSize = 150;
+                const minHeight = 80;
+                const maxHeight = 200;
+                const topHeight = minHeight + Math.random() * (maxHeight - minHeight);
+                const bottomHeight = minHeight + Math.random() * (maxHeight - minHeight);
+                
+                obstacle = {
+                    type: obstacleTypes.SKYSCRAPER,
+                    x: canvas.width,
+                    width: 60,
+                    topHeight: topHeight,
+                    bottomHeight: bottomHeight,
+                    hasTop: Math.random() > 0.3,
+                    hasBottom: Math.random() > 0.3,
+                    passed: false
+                };
+            } else if (type < 0.8) {
+                // Power line
+                obstacle = {
+                    type: obstacleTypes.WIRE,
+                    x: canvas.width,
+                    y: 150 + Math.random() * 300,
+                    width: 120,
+                    height: 4,
+                    passed: false
+                };
+            } else {
+                // Storm cloud
+                obstacle = {
+                    type: obstacleTypes.STORM_CLOUD,
+                    x: canvas.width,
+                    y: 100 + Math.random() * 200,
+                    width: 100,
+                    height: 60,
+                    vx: -1,
+                    vy: Math.random() > 0.5 ? 1 : -1,
+                    passed: false
+                };
+            }
+            
+            obstacles.push(obstacle);
+            lastObstacleTime = now;
+        }
+        
+        function createPackage() {
+            const now = Date.now();
+            if (now - lastPackageTime < 3000) return;
+            
+            packages.push({
+                x: canvas.width,
+                y: 150 + Math.random() * 300,
+                width: 25,
+                height: 25,
+                collected: false
+            });
+            
+            lastPackageTime = now;
+        }
+        
+        function checkCollisions() {
+            // Ground and ceiling
+            if (drone.y <= 0 || drone.y + drone.height >= canvas.height) {
+                gameOver();
+                return;
+            }
+            
+            // Obstacles
+            for (let obstacle of obstacles) {
+                if (obstacle.type === obstacleTypes.SKYSCRAPER) {
+                    if (drone.x < obstacle.x + obstacle.width && 
+                        drone.x + drone.width > obstacle.x) {
+                        if ((obstacle.hasTop && drone.y < obstacle.topHeight) ||
+                            (obstacle.hasBottom && drone.y + drone.height > canvas.height - obstacle.bottomHeight)) {
+                            gameOver();
+                            return;
+                        }
+                        if (!obstacle.passed && drone.x > obstacle.x + obstacle.width) {
+                            score += 10;
+                            obstacle.passed = true;
+                        }
+                    }
+                } else if (obstacle.type === obstacleTypes.WIRE) {
+                    if (drone.x < obstacle.x + obstacle.width && 
+                        drone.x + drone.width > obstacle.x &&
+                        drone.y < obstacle.y + 10 && 
+                        drone.y + drone.height > obstacle.y - 10) {
+                        gameOver();
+                        return;
+                    }
+                } else if (obstacle.type === obstacleTypes.STORM_CLOUD) {
+                    if (drone.x < obstacle.x + obstacle.width && 
+                        drone.x + drone.width > obstacle.x &&
+                        drone.y < obstacle.y + obstacle.height && 
+                        drone.y + drone.height > obstacle.y) {
+                        gameOver();
+                        return;
+                    }
+                }
+            }
+            
+            // Packages
+            for (let pkg of packages) {
+                if (!pkg.collected && 
+                    drone.x < pkg.x + pkg.width && 
+                    drone.x + drone.width > pkg.x &&
+                    drone.y < pkg.y + pkg.height && 
+                    drone.y + drone.height > pkg.y) {
+                    pkg.collected = true;
+                    score += 50;
+                    
+                    // Create particles
+                    for (let i = 0; i < 8; i++) {
+                        particles.push({
+                            x: pkg.x + pkg.width/2,
+                            y: pkg.y + pkg.height/2,
+                            vx: (Math.random() - 0.5) * 6,
+                            vy: (Math.random() - 0.5) * 6,
+                            life: 30,
+                            color: '#f39c12'
+                        });
+                    }
+                }
+            }
+        }
+        
+        function updateGame() {
+            if (!gameRunning) return;
+            
+            // Update drone
+            drone.velocity += drone.gravity;
+            drone.y += drone.velocity;
+            drone.rotation = Math.max(-0.5, Math.min(0.5, drone.velocity * 0.05));
+            
+            // Update obstacles
+            obstacles.forEach((obstacle, index) => {
+                obstacle.x -= gameSpeed;
+                
+                if (obstacle.type === obstacleTypes.STORM_CLOUD) {
+                    obstacle.x += obstacle.vx;
+                    obstacle.y += obstacle.vy;
+                    
+                    if (obstacle.y <= 50 || obstacle.y >= 300) {
+                        obstacle.vy *= -1;
+                    }
+                }
+                
+                if (obstacle.x + obstacle.width < 0) {
+                    obstacles.splice(index, 1);
+                }
+            });
+            
+            // Update packages
+            packages.forEach((pkg, index) => {
+                pkg.x -= gameSpeed;
+                
+                if (pkg.x + pkg.width < 0 || pkg.collected) {
+                    packages.splice(index, 1);
+                }
+            });
+            
+            // Update particles
+            particles.forEach((particle, index) => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life--;
+                particle.vx *= 0.98;
+                particle.vy *= 0.98;
+                
+                if (particle.life <= 0) {
+                    particles.splice(index, 1);
+                }
+            });
+            
+            createObstacle();
+            createPackage();
+            checkCollisions();
+            
+            // Increase game speed gradually
+            gameSpeed += 0.001;
+        }
+        
+        function drawParticles() {
+            particles.forEach(particle => {
+                ctx.fillStyle = particle.color;
+                ctx.globalAlpha = particle.life / 30;
+                ctx.fillRect(particle.x, particle.y, 3, 3);
+                ctx.globalAlpha = 1;
+            });
+        }
+        
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw game objects
+            drawDrone();
+            
+            obstacles.forEach(drawObstacle);
+            packages.forEach(drawPackage);
+            drawParticles();
+            
+            // Update score display
+            document.getElementById('score').textContent = `Score: ${score}`;
+        }
+        
+        function gameLoop() {
+            updateGame();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function jump() {
+            if (gameRunning) {
+                drone.velocity = drone.jumpPower;
+            }
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        function restartGame() {
+            gameRunning = true;
+            score = 0;
+            gameSpeed = 2;
+            
+            drone.x = 100;
+            drone.y = 300;
+            drone.velocity = 0;
+            drone.rotation = 0;
+            
+            obstacles = [];
+            packages = [];
+            particles = [];
+            
+            lastObstacleTime = 0;
+            lastPackageTime = 0;
+            
+            document.getElementById('gameOver').style.display = 'none';
+        }
+        
+        // Event listeners
+        canvas.addEventListener('click', jump);
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                jump();
+            }
+        });
+        
+        // Start game
+        gameLoop();
+    </script>
+</body>
+</html>
