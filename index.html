@@ -33,14 +33,15 @@
             bottom: 0;
             width: 100%;
             height: 150px;
-            background: linear-gradient(to top, #2c3e50 0%, #34495e 50%, #5a6c7d 100%);
+            background: linear-gradient(to top, #34495e 0%, #5a6c7d 30%, rgba(90, 108, 125, 0.3) 100%);
         }
         
         .building {
             position: absolute;
             bottom: 0;
             background: linear-gradient(to top, #2c3e50, #34495e);
-            border-top: 3px solid #f39c12;
+            border-top-left-radius: 3px;
+            border-top-right-radius: 3px;
         }
         
         .cloud {
@@ -162,7 +163,8 @@
         const ctx = canvas.getContext('2d');
         
         // Game state
-        let gameRunning = true;
+        let gameRunning = false;
+        let gameStarted = false;
         let score = 0;
         let gameSpeed = 2;
         
@@ -187,7 +189,8 @@
         const obstacleTypes = {
             SKYSCRAPER: 'skyscraper',
             WIRE: 'wire',
-            STORM_CLOUD: 'storm_cloud'
+            STORM_CLOUD: 'storm_cloud',
+            BIRD: 'bird'
         };
         
         let lastObstacleTime = 0;
@@ -307,21 +310,16 @@
         
         function drawObstacle(obstacle) {
             if (obstacle.type === obstacleTypes.SKYSCRAPER) {
-                // Top building
-                if (obstacle.hasTop) {
-                    ctx.fillStyle = '#2c3e50';
-                    ctx.fillRect(obstacle.x, 0, obstacle.width, obstacle.topHeight);
-                    ctx.fillStyle = '#f39c12';
-                    ctx.fillRect(obstacle.x, obstacle.topHeight - 3, obstacle.width, 3);
-                }
+                // Only bottom building now
+                ctx.fillStyle = '#2c3e50';
+                ctx.fillRect(obstacle.x, canvas.height - obstacle.height, obstacle.width, obstacle.height);
                 
-                // Bottom building
-                if (obstacle.hasBottom) {
-                    ctx.fillStyle = '#2c3e50';
-                    ctx.fillRect(obstacle.x, canvas.height - obstacle.bottomHeight, obstacle.width, obstacle.bottomHeight);
-                    ctx.fillStyle = '#f39c12';
-                    ctx.fillRect(obstacle.x, canvas.height - obstacle.bottomHeight, obstacle.width, 3);
-                }
+                // Building top with rounded corners
+                ctx.fillStyle = '#34495e';
+                ctx.fillRect(obstacle.x, canvas.height - obstacle.height, obstacle.width, 10);
+                
+                // Add windows to building
+                drawBuildingWindows(obstacle.x, canvas.height - obstacle.height, obstacle.width, obstacle.height);
             } else if (obstacle.type === obstacleTypes.WIRE) {
                 ctx.strokeStyle = '#34495e';
                 ctx.lineWidth = 4;
@@ -353,116 +351,247 @@
                     ctx.lineTo(obstacle.x + 50, obstacle.y + 65);
                     ctx.stroke();
                 }
+            } else if (obstacle.type === obstacleTypes.BIRD) {
+                // Realistic bird with animated wings
+                const wingFlap = Math.sin(Date.now() * 0.03 + obstacle.x * 0.1);
+                
+                // Bird body (more elongated and realistic)
+                ctx.fillStyle = '#8d6e63';
+                ctx.beginPath();
+                ctx.ellipse(obstacle.x + 12, obstacle.y + 10, 14, 7, -0.2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Bird head
+                ctx.fillStyle = '#6d4c41';
+                ctx.beginPath();
+                ctx.arc(obstacle.x + 25, obstacle.y + 7, 6, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Eye
+                ctx.fillStyle = '#2c3e50';
+                ctx.beginPath();
+                ctx.arc(obstacle.x + 27, obstacle.y + 6, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Beak
+                ctx.fillStyle = '#ff5722';
+                ctx.beginPath();
+                ctx.moveTo(obstacle.x + 31, obstacle.y + 7);
+                ctx.lineTo(obstacle.x + 34, obstacle.y + 8);
+                ctx.lineTo(obstacle.x + 31, obstacle.y + 9);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Tail feathers
+                ctx.fillStyle = '#5d4037';
+                ctx.beginPath();
+                ctx.ellipse(obstacle.x + 2, obstacle.y + 12, 6, 3, 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Realistic wing animation with clear wing shapes
+                const wingAngle = wingFlap * 0.8; // More pronounced flapping
+                
+                // Left wing (top wing when viewed from side)
+                ctx.save();
+                ctx.translate(obstacle.x + 15, obstacle.y + 8);
+                ctx.rotate(wingAngle);
+                ctx.fillStyle = '#5d4037';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 12, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Wing details (primary feathers)
+                ctx.strokeStyle = '#4a2c2a';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(-8, -2);
+                ctx.lineTo(-12, -3);
+                ctx.moveTo(-6, -1);
+                ctx.lineTo(-10, -2);
+                ctx.moveTo(-4, 0);
+                ctx.lineTo(-8, -1);
+                ctx.stroke();
+                ctx.restore();
+                
+                // Right wing (bottom wing when viewed from side)
+                ctx.save();
+                ctx.translate(obstacle.x + 15, obstacle.y + 12);
+                ctx.rotate(-wingAngle);
+                ctx.fillStyle = '#6d4c41';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 12, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Wing details (primary feathers)
+                ctx.strokeStyle = '#5d4037';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(-8, 2);
+                ctx.lineTo(-12, 3);
+                ctx.moveTo(-6, 1);
+                ctx.lineTo(-10, 2);
+                ctx.moveTo(-4, 0);
+                ctx.lineTo(-8, 1);
+                ctx.stroke();
+                ctx.restore();
+                
+                // Update bird movement
+                obstacle.y += obstacle.vy;
+                obstacle.x -= gameSpeed * 0.8; // Birds move slightly slower
+                
+                // Bounce off boundaries
+                if (obstacle.y <= 50 || obstacle.y >= 400) {
+                    obstacle.vy *= -1;
+                }
+            }
+        }
+        
+        function drawBuildingWindows(buildingX, buildingY, buildingWidth, buildingHeight) {
+            const windowWidth = 8;
+            const windowHeight = 10;
+            const windowSpacingX = 12;
+            const windowSpacingY = 15;
+            
+            for (let x = buildingX + 6; x < buildingX + buildingWidth - windowWidth; x += windowSpacingX) {
+                for (let y = buildingY + 10; y < buildingY + buildingHeight - windowHeight - 10; y += windowSpacingY) {
+                    // Fixed window colors based on position - no more random changing
+                    const windowIndex = Math.floor((x - buildingX) / windowSpacingX) + Math.floor((y - buildingY) / windowSpacingY);
+                    let windowColor;
+                    
+                    if (windowIndex % 3 === 0) {
+                        windowColor = '#f1c40f'; // Yellow (lit)
+                    } else if (windowIndex % 3 === 1) {
+                        windowColor = '#ecf0f1'; // White (lit)
+                    } else {
+                        windowColor = '#34495e'; // Dark (unlit)
+                    }
+                    
+                    ctx.fillStyle = windowColor;
+                    ctx.fillRect(x, y, windowWidth, windowHeight);
+                    
+                    // Window frame
+                    ctx.strokeStyle = '#1a1a1a';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x, y, windowWidth, windowHeight);
+                }
             }
         }
         
         function drawPackage(pkg) {
-            // Package glow effect
+            // Enhanced bright green glow effect
             ctx.save();
-            ctx.shadowColor = '#f39c12';
-            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00ff88';
+            ctx.shadowBlur = 30;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
             
-            // Outer glow ring
-            const pulseSize = 2 + Math.sin(pkg.x * 0.1 + Date.now() * 0.005) * 1;
-            ctx.fillStyle = 'rgba(243, 156, 18, 0.3)';
+            // Outer bright green glow ring - much brighter
+            const pulseSize = 5 + Math.sin(pkg.x * 0.1 + Date.now() * 0.005) * 3;
+            ctx.fillStyle = 'rgba(0, 255, 136, 0.6)';
             ctx.beginPath();
-            ctx.roundRect(pkg.x - pulseSize, pkg.y - pulseSize, pkg.width + pulseSize * 2, pkg.height + pulseSize * 2, 3);
+            ctx.arc(pkg.x + pkg.width/2, pkg.y + pkg.height/2, pkg.width/2 + pulseSize, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Inner bright green glow
+            ctx.fillStyle = 'rgba(46, 204, 113, 0.8)';
+            ctx.beginPath();
+            ctx.arc(pkg.x + pkg.width/2, pkg.y + pkg.height/2, pkg.width/2 + 3, 0, Math.PI * 2);
             ctx.fill();
             
             ctx.restore();
             
-            // 3D Package effect - back face (darker)
-            ctx.fillStyle = '#d35400';
-            ctx.beginPath();
-            ctx.roundRect(pkg.x + 2, pkg.y - 2, pkg.width, pkg.height, 2);
-            ctx.fill();
+            // 3D Package box with depth
+            const depth = 6;
             
-            // 3D Package effect - side face
-            ctx.fillStyle = '#e67e22';
-            ctx.beginPath();
-            ctx.moveTo(pkg.x + pkg.width, pkg.y);
-            ctx.lineTo(pkg.x + pkg.width + 2, pkg.y - 2);
-            ctx.lineTo(pkg.x + pkg.width + 2, pkg.y + pkg.height - 2);
-            ctx.lineTo(pkg.x + pkg.width, pkg.y + pkg.height);
-            ctx.closePath();
-            ctx.fill();
-            
-            // 3D Package effect - top face
+            // Top face of the box (3D effect)
             ctx.fillStyle = '#f39c12';
             ctx.beginPath();
             ctx.moveTo(pkg.x, pkg.y);
-            ctx.lineTo(pkg.x + 2, pkg.y - 2);
-            ctx.lineTo(pkg.x + pkg.width + 2, pkg.y - 2);
+            ctx.lineTo(pkg.x + depth, pkg.y - depth);
+            ctx.lineTo(pkg.x + pkg.width + depth, pkg.y - depth);
             ctx.lineTo(pkg.x + pkg.width, pkg.y);
             ctx.closePath();
             ctx.fill();
             
-            // Main package face
+            // Right face of the box (3D effect)
             ctx.fillStyle = '#e67e22';
             ctx.beginPath();
-            ctx.roundRect(pkg.x, pkg.y, pkg.width, pkg.height, 2);
+            ctx.moveTo(pkg.x + pkg.width, pkg.y);
+            ctx.lineTo(pkg.x + pkg.width + depth, pkg.y - depth);
+            ctx.lineTo(pkg.x + pkg.width + depth, pkg.y + pkg.height - depth);
+            ctx.lineTo(pkg.x + pkg.width, pkg.y + pkg.height);
+            ctx.closePath();
             ctx.fill();
             
-            // Package tape - horizontal
+            // Front face of the box (main face)
+            ctx.fillStyle = '#e67e22';
+            ctx.fillRect(pkg.x, pkg.y, pkg.width, pkg.height);
+            
+            // Package tape on front face
+            ctx.fillStyle = '#d35400';
+            ctx.fillRect(pkg.x, pkg.y + pkg.height/2 - 2, pkg.width, 4);
+            ctx.fillRect(pkg.x + pkg.width/2 - 2, pkg.y, 4, pkg.height);
+            
+            // Package tape on top face
             ctx.fillStyle = '#c0392b';
             ctx.beginPath();
-            ctx.roundRect(pkg.x, pkg.y + pkg.height/2 - 2, pkg.width, 4, 1);
+            ctx.moveTo(pkg.x + pkg.width/2 - 2, pkg.y);
+            ctx.lineTo(pkg.x + pkg.width/2 - 2 + depth, pkg.y - depth);
+            ctx.lineTo(pkg.x + pkg.width/2 + 2 + depth, pkg.y - depth);
+            ctx.lineTo(pkg.x + pkg.width/2 + 2, pkg.y);
+            ctx.closePath();
             ctx.fill();
             
-            // Package tape - vertical
-            ctx.fillStyle = '#c0392b';
-            ctx.beginPath();
-            ctx.roundRect(pkg.x + pkg.width/2 - 2, pkg.y, 4, pkg.height, 1);
-            ctx.fill();
+            // Package label/address sticker
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillRect(pkg.x + 4, pkg.y + 4, pkg.width - 8, 8);
             
-            // Highlight on package
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            // Label text lines
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(pkg.x + 6, pkg.y + 6, pkg.width - 12, 1);
+            ctx.fillRect(pkg.x + 6, pkg.y + 8, (pkg.width - 12) * 0.7, 1);
+            ctx.fillRect(pkg.x + 6, pkg.y + 10, (pkg.width - 12) * 0.5, 1);
+            
+            // Box edges/outlines for more definition
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(pkg.x, pkg.y, pkg.width, pkg.height);
+            
+            // 3D edges
             ctx.beginPath();
-            ctx.roundRect(pkg.x + 2, pkg.y + 2, pkg.width - 8, 4, 1);
-            ctx.fill();
+            ctx.moveTo(pkg.x, pkg.y);
+            ctx.lineTo(pkg.x + depth, pkg.y - depth);
+            ctx.moveTo(pkg.x + pkg.width, pkg.y);
+            ctx.lineTo(pkg.x + pkg.width + depth, pkg.y - depth);
+            ctx.moveTo(pkg.x + pkg.width, pkg.y + pkg.height);
+            ctx.lineTo(pkg.x + pkg.width + depth, pkg.y + pkg.height - depth);
+            ctx.stroke();
             
             // Floating animation
-            pkg.y += Math.sin(pkg.x * 0.01 + Date.now() * 0.003) * 0.5;
+            pkg.y += Math.sin(pkg.x * 0.01 + Date.now() * 0.003) * 0.8;
         }
         
         function createObstacle() {
             const now = Date.now();
-            if (now - lastObstacleTime < 2000) return;
+            if (now - lastObstacleTime < 1600) return;
             
             const type = Math.random();
             let obstacle;
             
             if (type < 0.5) {
-                // Skyscraper
-                const gapSize = 150;
+                // Bottom-only skyscraper
                 const minHeight = 80;
-                const maxHeight = 200;
-                const topHeight = minHeight + Math.random() * (maxHeight - minHeight);
-                const bottomHeight = minHeight + Math.random() * (maxHeight - minHeight);
+                const maxHeight = 250;
+                const height = minHeight + Math.random() * (maxHeight - minHeight);
                 
                 obstacle = {
                     type: obstacleTypes.SKYSCRAPER,
                     x: canvas.width,
                     width: 60,
-                    topHeight: topHeight,
-                    bottomHeight: bottomHeight,
-                    hasTop: Math.random() > 0.3,
-                    hasBottom: Math.random() > 0.3,
+                    height: height,
                     passed: false
                 };
-            } else if (type < 0.8) {
-                // Power line
-                obstacle = {
-                    type: obstacleTypes.WIRE,
-                    x: canvas.width,
-                    y: 150 + Math.random() * 300,
-                    width: 120,
-                    height: 4,
-                    passed: false
-                };
-            } else {
+            } else if (type < 0.75) {
                 // Storm cloud
                 obstacle = {
                     type: obstacleTypes.STORM_CLOUD,
@@ -472,6 +601,17 @@
                     height: 60,
                     vx: -1,
                     vy: Math.random() > 0.5 ? 1 : -1,
+                    passed: false
+                };
+            } else {
+                // Bird
+                obstacle = {
+                    type: obstacleTypes.BIRD,
+                    x: canvas.width,
+                    y: 100 + Math.random() * 300,
+                    width: 35,
+                    height: 20,
+                    vy: (Math.random() - 0.5) * 2,
                     passed: false
                 };
             }
@@ -506,26 +646,24 @@
             for (let obstacle of obstacles) {
                 if (obstacle.type === obstacleTypes.SKYSCRAPER) {
                     if (drone.x < obstacle.x + obstacle.width && 
-                        drone.x + drone.width > obstacle.x) {
-                        if ((obstacle.hasTop && drone.y < obstacle.topHeight) ||
-                            (obstacle.hasBottom && drone.y + drone.height > canvas.height - obstacle.bottomHeight)) {
-                            gameOver();
-                            return;
-                        }
-                        if (!obstacle.passed && drone.x > obstacle.x + obstacle.width) {
-                            score += 10;
-                            obstacle.passed = true;
-                        }
-                    }
-                } else if (obstacle.type === obstacleTypes.WIRE) {
-                    if (drone.x < obstacle.x + obstacle.width && 
                         drone.x + drone.width > obstacle.x &&
-                        drone.y < obstacle.y + 10 && 
-                        drone.y + drone.height > obstacle.y - 10) {
+                        drone.y + drone.height > canvas.height - obstacle.height) {
                         gameOver();
                         return;
                     }
+                    if (!obstacle.passed && drone.x > obstacle.x + obstacle.width) {
+                        score += 10;
+                        obstacle.passed = true;
+                    }
                 } else if (obstacle.type === obstacleTypes.STORM_CLOUD) {
+                    if (drone.x < obstacle.x + obstacle.width && 
+                        drone.x + drone.width > obstacle.x &&
+                        drone.y < obstacle.y + obstacle.height && 
+                        drone.y + drone.height > obstacle.y) {
+                        gameOver();
+                        return;
+                    }
+                } else if (obstacle.type === obstacleTypes.BIRD) {
                     if (drone.x < obstacle.x + obstacle.width && 
                         drone.x + drone.width > obstacle.x &&
                         drone.y < obstacle.y + obstacle.height && 
@@ -554,7 +692,7 @@
                             vx: (Math.random() - 0.5) * 6,
                             vy: (Math.random() - 0.5) * 6,
                             life: 30,
-                            color: '#f39c12'
+                            color: '#2ecc71'
                         });
                     }
                 }
@@ -562,7 +700,14 @@
         }
         
         function updateGame() {
-            if (!gameRunning) return;
+            if (!gameRunning) {
+                // Idle floating animation when game hasn't started
+                if (!gameStarted) {
+                    drone.y = 300 + Math.sin(Date.now() * 0.002) * 10;
+                    drone.rotation = Math.sin(Date.now() * 0.003) * 0.05;
+                }
+                return;
+            }
             
             // Update drone
             drone.velocity += drone.gravity;
@@ -571,14 +716,16 @@
             
             // Update obstacles
             obstacles.forEach((obstacle, index) => {
-                obstacle.x -= gameSpeed;
-                
-                if (obstacle.type === obstacleTypes.STORM_CLOUD) {
-                    obstacle.x += obstacle.vx;
-                    obstacle.y += obstacle.vy;
+                if (obstacle.type !== obstacleTypes.BIRD) {
+                    obstacle.x -= gameSpeed;
                     
-                    if (obstacle.y <= 50 || obstacle.y >= 300) {
-                        obstacle.vy *= -1;
+                    if (obstacle.type === obstacleTypes.STORM_CLOUD) {
+                        obstacle.x += obstacle.vx;
+                        obstacle.y += obstacle.vy;
+                        
+                        if (obstacle.y <= 50 || obstacle.y >= 300) {
+                            obstacle.vy *= -1;
+                        }
                     }
                 }
                 
@@ -630,6 +777,23 @@
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // Draw start screen message
+            if (!gameStarted) {
+                ctx.fillStyle = 'rgba(44, 62, 80, 0.8)';
+                ctx.fillRect(canvas.width/2 - 200, canvas.height/2 - 80, 400, 160);
+                
+                ctx.fillStyle = '#ecf0f1';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('DRONE DELIVERY DASH', canvas.width/2, canvas.height/2 - 30);
+                
+                ctx.font = '18px Arial';
+                ctx.fillText('Press SPACE or TAP to start!', canvas.width/2, canvas.height/2 + 10);
+                
+                ctx.font = '14px Arial';
+                ctx.fillText('Collect green packages • Avoid obstacles', canvas.width/2, canvas.height/2 + 40);
+            }
+            
             // Draw game objects
             drawDrone();
             
@@ -648,6 +812,12 @@
         }
         
         function jump() {
+            if (!gameStarted) {
+                gameStarted = true;
+                gameRunning = true;
+                return;
+            }
+            
             if (gameRunning) {
                 drone.velocity = drone.jumpPower;
             }
@@ -660,7 +830,8 @@
         }
         
         function restartGame() {
-            gameRunning = true;
+            gameRunning = false;
+            gameStarted = false;
             score = 0;
             gameSpeed = 2;
             
