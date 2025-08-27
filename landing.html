@@ -63,9 +63,15 @@
       border-radius: 12px;
     }
 
+    /* button wrapper to center it */
+    .button-container {
+      text-align: center;
+      margin-top: 10px;
+    }
+
     .button {
       display: inline-block;
-      padding: 14px 28px;
+      padding: 12px 28px;
       background: #2c3e50;
       color: white;
       border-radius: 8px;
@@ -95,8 +101,10 @@
     <p>Deliver packages, dodge obstacles, and explore the power of AI-built products.</p>
   </header>
 
-  <!-- Button moved ABOVE the screenshot -->
-  <button class="button" onclick="loadGame()">Play Now</button>
+  <!-- Button above screenshot -->
+  <div class="button-container">
+    <button class="button" onclick="loadGame()">Play Now</button>
+  </div>
 
   <div class="frame" id="game-frame">
     <!-- Show screenshot initially -->
@@ -110,7 +118,8 @@
   <script>
     function loadGame() {
       const frame = document.getElementById("game-frame");
-      frame.innerHTML = '<iframe src="game.html"></iframe>';
+      // Change "index.html" to your actual game file if different
+      frame.innerHTML = '<iframe src="index.html"></iframe>';
     }
   </script>
 </body>
