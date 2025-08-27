@@ -65,15 +65,16 @@
 
     .button {
       display: inline-block;
-      padding: 12px 24px;
-      margin: 20px;
+      padding: 14px 28px;
       background: #2c3e50;
       color: white;
       border-radius: 8px;
       text-decoration: none;
+      font-size: 1.1rem;
       font-weight: bold;
       transition: 0.3s;
       cursor: pointer;
+      border: none;
     }
 
     .button:hover {
@@ -94,12 +95,13 @@
     <p>Deliver packages, dodge obstacles, and explore the power of AI-built products.</p>
   </header>
 
+  <!-- Button moved ABOVE the screenshot -->
+  <button class="button" onclick="loadGame()">Play Now</button>
+
   <div class="frame" id="game-frame">
     <!-- Show screenshot initially -->
     <img src="cover.png" alt="Game Screenshot">
   </div>
-
-  <button class="button" onclick="loadGame()">Play Now</button>
 
   <footer>
     © 2024 kirangosavi26 • Built with AI
