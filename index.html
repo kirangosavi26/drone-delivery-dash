@@ -15,12 +15,15 @@
             background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 50%, #B0E0E6 100%);
             font-family: 'Arial', sans-serif;
             overflow: hidden;
+            touch-action: none; /* Prevent scrolling on mobile */
         }
         
         .game-container {
             position: relative;
-            width: 800px;
-            height: 600px;
+            width: 100vw;
+            height: 100vh;
+            max-width: 800px;
+            max-height: 600px;
             background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 30%, #B0E0E6 60%, #87CEEB 100%);
             border: 3px solid #333;
             border-radius: 10px;
@@ -28,12 +31,23 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
         
+        /* Mobile adjustments */
+        @media (max-width: 900px) {
+            .game-container {
+                width: 100vw;
+                height: 100vh;
+                border-radius: 0;
+                border: none;
+                max-width: none;
+                max-height: none;
+            }
+        }
+        
         .city-bg {
             position: absolute;
             bottom: 0;
             width: 100%;
-            height: 150px;
-            background: linear-gradient(to top, #34495e 0%, #5a6c7d 30%, rgba(90, 108, 125, 0.3) 100%);
+            height: 200px;
         }
         
         .building {
@@ -64,6 +78,8 @@
             top: 0;
             left: 0;
             cursor: pointer;
+            width: 100%;
+            height: 100%;
         }
         
         .score {
@@ -71,7 +87,7 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 32px;
+            font-size: min(32px, 6vw);
             font-weight: bold;
             color: #2c3e50;
             text-shadow: 2px 2px 4px rgba(255,255,255,0.8);
@@ -85,43 +101,60 @@
             transform: translate(-50%, -50%);
             background: rgba(44, 62, 80, 0.95);
             color: white;
-            padding: 30px;
+            padding: min(30px, 5vw);
             border-radius: 15px;
             text-align: center;
             display: none;
             z-index: 20;
+            max-width: 90vw;
+            box-sizing: border-box;
         }
         
         .game-over h2 {
             margin: 0 0 10px 0;
             color: #e74c3c;
+            font-size: min(24px, 5vw);
+        }
+        
+        .game-over p {
+            font-size: min(16px, 3.5vw);
+            margin: 10px 0;
         }
         
         .restart-btn {
             background: #3498db;
             color: white;
             border: none;
-            padding: 12px 24px;
-            font-size: 18px;
+            padding: min(12px, 3vw) min(24px, 5vw);
+            font-size: min(18px, 4vw);
             border-radius: 8px;
             cursor: pointer;
             margin-top: 15px;
             transition: background 0.3s;
+            touch-action: manipulation; /* Better touch response */
         }
         
         .restart-btn:hover {
             background: #2980b9;
         }
         
-        .instructions {
+        /* Mobile controls hint */
+        .mobile-controls {
             position: absolute;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            color: #2c3e50;
+            color: rgba(44, 62, 80, 0.7);
+            font-size: min(14px, 3vw);
             text-align: center;
-            font-size: 14px;
             z-index: 10;
+            display: none;
+        }
+        
+        @media (max-width: 900px) {
+            .mobile-controls {
+                display: block;
+            }
         }
     </style>
 </head>
@@ -129,20 +162,20 @@
     <div class="game-container">
         <div class="city-bg"></div>
         
-        <!-- Background buildings -->
-        <div class="building" style="left: 100px; width: 80px; height: 120px;"></div>
-        <div class="building" style="left: 220px; width: 60px; height: 90px;"></div>
-        <div class="building" style="left: 320px; width: 100px; height: 140px;"></div>
-        <div class="building" style="left: 480px; width: 70px; height: 110px;"></div>
-        <div class="building" style="left: 600px; width: 90px; height: 130px;"></div>
+        <!-- Background buildings - will be positioned dynamically -->
+        <div class="building" id="building1"></div>
+        <div class="building" id="building2"></div>
+        <div class="building" id="building3"></div>
+        <div class="building" id="building4"></div>
+        <div class="building" id="building5"></div>
         
         <!-- Background clouds -->
-        <div class="cloud" style="top: 80px; left: 150px; width: 80px; height: 40px;">
+        <div class="cloud" id="cloud1">
             <div style="position: absolute; top: -20px; left: 20px; width: 50px; height: 50px; background: #ecf0f1; border-radius: 50%;"></div>
             <div style="position: absolute; top: -15px; left: -10px; width: 40px; height: 40px; background: #ecf0f1; border-radius: 50%;"></div>
         </div>
         
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <canvas id="gameCanvas"></canvas>
         
         <div class="score" id="score">Score: 0</div>
         
@@ -153,8 +186,8 @@
             <button class="restart-btn" onclick="restartGame()">Try Again</button>
         </div>
         
-        <div class="instructions">
-            Click or press SPACE to fly up • Collect packages • Avoid obstacles!
+        <div class="mobile-controls" id="mobileControls">
+            Tap anywhere to fly!
         </div>
     </div>
 
@@ -162,21 +195,69 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
+        // Responsive canvas setup
+        let canvasWidth, canvasHeight;
+        let scaleX = 1, scaleY = 1;
+        
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            const containerRect = container.getBoundingClientRect();
+            
+            // Set canvas size to match container
+            canvasWidth = containerRect.width;
+            canvasHeight = containerRect.height;
+            
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            // Calculate scale factors (original game was 800x600)
+            scaleX = canvasWidth / 800;
+            scaleY = canvasHeight / 600;
+            
+            // Position background elements responsively
+            positionBackgroundElements();
+        }
+        
+        function positionBackgroundElements() {
+            // Position buildings responsively
+            const buildings = [
+                {id: 'building1', x: 100 * scaleX, width: 80 * scaleX, height: 120 * scaleY},
+                {id: 'building2', x: 220 * scaleX, width: 60 * scaleX, height: 90 * scaleY},
+                {id: 'building3', x: 320 * scaleX, width: 100 * scaleX, height: 140 * scaleY},
+                {id: 'building4', x: 480 * scaleX, width: 70 * scaleX, height: 110 * scaleY},
+                {id: 'building5', x: 600 * scaleX, width: 90 * scaleX, height: 130 * scaleY}
+            ];
+            
+            buildings.forEach(building => {
+                const element = document.getElementById(building.id);
+                element.style.left = building.x + 'px';
+                element.style.width = building.width + 'px';
+                element.style.height = building.height + 'px';
+            });
+            
+            // Position cloud
+            const cloud = document.getElementById('cloud1');
+            cloud.style.top = (80 * scaleY) + 'px';
+            cloud.style.left = (150 * scaleX) + 'px';
+            cloud.style.width = (80 * scaleX) + 'px';
+            cloud.style.height = (40 * scaleY) + 'px';
+        }
+        
         // Game state
         let gameRunning = false;
         let gameStarted = false;
         let score = 0;
-        let gameSpeed = 2;
+        let gameSpeed = 2 * scaleX;
         
-        // Drone properties
+        // Drone properties (will be scaled)
         const drone = {
-            x: 100,
-            y: 300,
-            width: 40,
-            height: 30,
+            x: 100 * scaleX,
+            y: 300 * scaleY,
+            width: 40 * scaleX,
+            height: 30 * scaleY,
             velocity: 0,
-            gravity: 0.5,
-            jumpPower: -8,
+            gravity: 0.5 * scaleY,
+            jumpPower: -8 * scaleY,
             rotation: 0
         };
         
@@ -196,113 +277,135 @@
         let lastObstacleTime = 0;
         let lastPackageTime = 0;
         
+        // City skyline curve points
+        let cityPoints = [];
+        
+        function generateCityLine() {
+            cityPoints = [];
+            const numPoints = 20;
+            for (let i = 0; i <= numPoints; i++) {
+                const x = (canvasWidth / numPoints) * i;
+                const baseHeight = 150 * scaleY;
+                const variation = (30 + Math.sin(i * 0.5) * 20 + Math.cos(i * 0.8) * 15) * scaleY;
+                cityPoints.push({ x, y: canvasHeight - baseHeight - variation });
+            }
+        }
+        
+        function drawCityBackground() {
+            if (cityPoints.length === 0) generateCityLine();
+            
+            // Create gradient that follows the curve
+            const gradient = ctx.createLinearGradient(0, canvasHeight - 250 * scaleY, 0, canvasHeight);
+            gradient.addColorStop(0, 'rgba(52, 73, 94, 0.1)');
+            gradient.addColorStop(0.3, 'rgba(52, 73, 94, 0.4)');
+            gradient.addColorStop(0.7, 'rgba(52, 73, 94, 0.8)');
+            gradient.addColorStop(1, '#34495e');
+            
+            // Draw the curved city skyline
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(0, canvasHeight);
+            
+            // Draw curve through city points
+            ctx.moveTo(cityPoints[0].x, cityPoints[0].y);
+            for (let i = 1; i < cityPoints.length - 2; i++) {
+                const xc = (cityPoints[i].x + cityPoints[i + 1].x) / 2;
+                const yc = (cityPoints[i].y + cityPoints[i + 1].y) / 2;
+                ctx.quadraticCurveTo(cityPoints[i].x, cityPoints[i].y, xc, yc);
+            }
+            ctx.quadraticCurveTo(
+                cityPoints[cityPoints.length - 2].x,
+                cityPoints[cityPoints.length - 2].y,
+                cityPoints[cityPoints.length - 1].x,
+                cityPoints[cityPoints.length - 1].y
+            );
+            
+            // Complete the shape to fill the bottom
+            ctx.lineTo(canvasWidth, canvasHeight);
+            ctx.lineTo(0, canvasHeight);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
         function drawDrone() {
             ctx.save();
             ctx.translate(drone.x + drone.width/2, drone.y + drone.height/2);
             ctx.rotate(drone.rotation);
+            
+            // Scale propeller and drone elements
+            const propellerSize = 8 * Math.min(scaleX, scaleY);
+            const armLength = 18 * scaleX;
+            const bodySize = Math.min(scaleX, scaleY);
             
             // Spinning propeller animation
             const propellerRotation = (Date.now() * 0.01) % (Math.PI * 2);
             
             // Propeller arms
             ctx.strokeStyle = '#2c3e50';
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 3 * bodySize;
             ctx.beginPath();
-            ctx.moveTo(-18, -8);
-            ctx.lineTo(18, -8);
-            ctx.moveTo(0, -18);
-            ctx.lineTo(0, 2);
+            ctx.moveTo(-armLength, -8 * scaleY);
+            ctx.lineTo(armLength, -8 * scaleY);
+            ctx.moveTo(0, -18 * scaleY);
+            ctx.lineTo(0, 2 * scaleY);
             ctx.stroke();
             
-            // Front left propeller
-            ctx.save();
-            ctx.translate(-15, -12);
-            ctx.rotate(propellerRotation);
-            ctx.strokeStyle = '#7f8c8d';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(-8, 0);
-            ctx.lineTo(8, 0);
-            ctx.moveTo(0, -8);
-            ctx.lineTo(0, 8);
-            ctx.stroke();
-            ctx.restore();
+            // Propellers (scaled)
+            const propellerPositions = [
+                [-15 * scaleX, -12 * scaleY],
+                [15 * scaleX, -12 * scaleY],
+                [-15 * scaleX, 8 * scaleY],
+                [15 * scaleX, 8 * scaleY]
+            ];
             
-            // Front right propeller
-            ctx.save();
-            ctx.translate(15, -12);
-            ctx.rotate(-propellerRotation);
-            ctx.strokeStyle = '#7f8c8d';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(-8, 0);
-            ctx.lineTo(8, 0);
-            ctx.moveTo(0, -8);
-            ctx.lineTo(0, 8);
-            ctx.stroke();
-            ctx.restore();
+            propellerPositions.forEach((pos, index) => {
+                ctx.save();
+                ctx.translate(pos[0], pos[1]);
+                ctx.rotate(index % 2 === 0 ? propellerRotation : -propellerRotation);
+                ctx.strokeStyle = '#7f8c8d';
+                ctx.lineWidth = 2 * bodySize;
+                ctx.beginPath();
+                ctx.moveTo(-propellerSize, 0);
+                ctx.lineTo(propellerSize, 0);
+                ctx.moveTo(0, -propellerSize);
+                ctx.lineTo(0, propellerSize);
+                ctx.stroke();
+                ctx.restore();
+            });
             
-            // Rear left propeller
-            ctx.save();
-            ctx.translate(-15, 8);
-            ctx.rotate(-propellerRotation);
-            ctx.strokeStyle = '#7f8c8d';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(-8, 0);
-            ctx.lineTo(8, 0);
-            ctx.moveTo(0, -8);
-            ctx.lineTo(0, 8);
-            ctx.stroke();
-            ctx.restore();
-            
-            // Rear right propeller
-            ctx.save();
-            ctx.translate(15, 8);
-            ctx.rotate(propellerRotation);
-            ctx.strokeStyle = '#7f8c8d';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(-8, 0);
-            ctx.lineTo(8, 0);
-            ctx.moveTo(0, -8);
-            ctx.lineTo(0, 8);
-            ctx.stroke();
-            ctx.restore();
-            
-            // Drone main body (rounded)
+            // Drone main body (scaled)
             ctx.fillStyle = '#34495e';
             ctx.beginPath();
-            ctx.roundRect(-12, -6, 24, 12, 3);
+            ctx.roundRect(-12 * scaleX, -6 * scaleY, 24 * scaleX, 12 * scaleY, 3 * bodySize);
             ctx.fill();
             
             // Drone top section
             ctx.fillStyle = '#3498db';
             ctx.beginPath();
-            ctx.roundRect(-10, -5, 20, 8, 2);
+            ctx.roundRect(-10 * scaleX, -5 * scaleY, 20 * scaleX, 8 * scaleY, 2 * bodySize);
             ctx.fill();
             
             // Camera gimbal
             ctx.fillStyle = '#2c3e50';
             ctx.beginPath();
-            ctx.arc(0, 4, 4, 0, Math.PI * 2);
+            ctx.arc(0, 4 * scaleY, 4 * bodySize, 0, Math.PI * 2);
             ctx.fill();
             
             // Camera lens
             ctx.fillStyle = '#1a1a1a';
             ctx.beginPath();
-            ctx.arc(0, 4, 2, 0, Math.PI * 2);
+            ctx.arc(0, 4 * scaleY, 2 * bodySize, 0, Math.PI * 2);
             ctx.fill();
             
             // LED lights
             ctx.fillStyle = drone.velocity < 0 ? '#2ecc71' : '#e74c3c';
             ctx.beginPath();
-            ctx.arc(-8, 0, 2, 0, Math.PI * 2);
+            ctx.arc(-8 * scaleX, 0, 2 * bodySize, 0, Math.PI * 2);
             ctx.fill();
             
             ctx.fillStyle = '#f39c12';
             ctx.beginPath();
-            ctx.arc(8, 0, 2, 0, Math.PI * 2);
+            ctx.arc(8 * scaleX, 0, 2 * bodySize, 0, Math.PI * 2);
             ctx.fill();
             
             ctx.restore();
@@ -312,17 +415,17 @@
             if (obstacle.type === obstacleTypes.SKYSCRAPER) {
                 // Only bottom building now
                 ctx.fillStyle = '#2c3e50';
-                ctx.fillRect(obstacle.x, canvas.height - obstacle.height, obstacle.width, obstacle.height);
+                ctx.fillRect(obstacle.x, canvasHeight - obstacle.height, obstacle.width, obstacle.height);
                 
                 // Building top with rounded corners
                 ctx.fillStyle = '#34495e';
-                ctx.fillRect(obstacle.x, canvas.height - obstacle.height, obstacle.width, 10);
+                ctx.fillRect(obstacle.x, canvasHeight - obstacle.height, obstacle.width, 10 * scaleY);
                 
                 // Add windows to building
-                drawBuildingWindows(obstacle.x, canvas.height - obstacle.height, obstacle.width, obstacle.height);
+                drawBuildingWindows(obstacle.x, canvasHeight - obstacle.height, obstacle.width, obstacle.height);
             } else if (obstacle.type === obstacleTypes.WIRE) {
                 ctx.strokeStyle = '#34495e';
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 4 * Math.min(scaleX, scaleY);
                 ctx.beginPath();
                 ctx.moveTo(obstacle.x, obstacle.y);
                 ctx.lineTo(obstacle.x + obstacle.width, obstacle.y);
@@ -330,146 +433,146 @@
                 
                 // Wire posts
                 ctx.fillStyle = '#34495e';
-                ctx.fillRect(obstacle.x - 3, obstacle.y - 20, 6, 40);
-                ctx.fillRect(obstacle.x + obstacle.width - 3, obstacle.y - 20, 6, 40);
+                ctx.fillRect(obstacle.x - 3 * scaleX, obstacle.y - 20 * scaleY, 6 * scaleX, 40 * scaleY);
+                ctx.fillRect(obstacle.x + obstacle.width - 3 * scaleX, obstacle.y - 20 * scaleY, 6 * scaleX, 40 * scaleY);
             } else if (obstacle.type === obstacleTypes.STORM_CLOUD) {
+                const cloudScale = Math.min(scaleX, scaleY);
                 ctx.fillStyle = '#7f8c8d';
                 ctx.beginPath();
-                ctx.arc(obstacle.x + 30, obstacle.y + 20, 25, 0, Math.PI * 2);
-                ctx.arc(obstacle.x + 50, obstacle.y + 15, 30, 0, Math.PI * 2);
-                ctx.arc(obstacle.x + 75, obstacle.y + 20, 25, 0, Math.PI * 2);
+                ctx.arc(obstacle.x + 30 * scaleX, obstacle.y + 20 * scaleY, 25 * cloudScale, 0, Math.PI * 2);
+                ctx.arc(obstacle.x + 50 * scaleX, obstacle.y + 15 * scaleY, 30 * cloudScale, 0, Math.PI * 2);
+                ctx.arc(obstacle.x + 75 * scaleX, obstacle.y + 20 * scaleY, 25 * cloudScale, 0, Math.PI * 2);
                 ctx.fill();
                 
                 // Lightning effect
                 if (Math.random() < 0.1) {
                     ctx.strokeStyle = '#f1c40f';
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = 3 * cloudScale;
                     ctx.beginPath();
-                    ctx.moveTo(obstacle.x + 50, obstacle.y + 35);
-                    ctx.lineTo(obstacle.x + 45, obstacle.y + 50);
-                    ctx.lineTo(obstacle.x + 55, obstacle.y + 50);
-                    ctx.lineTo(obstacle.x + 50, obstacle.y + 65);
+                    ctx.moveTo(obstacle.x + 50 * scaleX, obstacle.y + 35 * scaleY);
+                    ctx.lineTo(obstacle.x + 45 * scaleX, obstacle.y + 50 * scaleY);
+                    ctx.lineTo(obstacle.x + 55 * scaleX, obstacle.y + 50 * scaleY);
+                    ctx.lineTo(obstacle.x + 50 * scaleX, obstacle.y + 65 * scaleY);
                     ctx.stroke();
                 }
             } else if (obstacle.type === obstacleTypes.BIRD) {
-                // Realistic bird with animated wings
+                // Realistic bird with animated wings (scaled)
                 const wingFlap = Math.sin(Date.now() * 0.03 + obstacle.x * 0.1);
+                const birdScale = Math.min(scaleX, scaleY);
                 
                 // Bird body (more elongated and realistic)
                 ctx.fillStyle = '#8d6e63';
                 ctx.beginPath();
-                ctx.ellipse(obstacle.x + 12, obstacle.y + 10, 14, 7, -0.2, 0, Math.PI * 2);
+                ctx.ellipse(obstacle.x + 12 * scaleX, obstacle.y + 10 * scaleY, 14 * birdScale, 7 * birdScale, -0.2, 0, Math.PI * 2);
                 ctx.fill();
                 
                 // Bird head
                 ctx.fillStyle = '#6d4c41';
                 ctx.beginPath();
-                ctx.arc(obstacle.x + 25, obstacle.y + 7, 6, 0, Math.PI * 2);
+                ctx.arc(obstacle.x + 25 * scaleX, obstacle.y + 7 * scaleY, 6 * birdScale, 0, Math.PI * 2);
                 ctx.fill();
                 
                 // Eye
                 ctx.fillStyle = '#2c3e50';
                 ctx.beginPath();
-                ctx.arc(obstacle.x + 27, obstacle.y + 6, 1.5, 0, Math.PI * 2);
+                ctx.arc(obstacle.x + 27 * scaleX, obstacle.y + 6 * scaleY, 1.5 * birdScale, 0, Math.PI * 2);
                 ctx.fill();
                 
                 // Beak
                 ctx.fillStyle = '#ff5722';
                 ctx.beginPath();
-                ctx.moveTo(obstacle.x + 31, obstacle.y + 7);
-                ctx.lineTo(obstacle.x + 34, obstacle.y + 8);
-                ctx.lineTo(obstacle.x + 31, obstacle.y + 9);
+                ctx.moveTo(obstacle.x + 31 * scaleX, obstacle.y + 7 * scaleY);
+                ctx.lineTo(obstacle.x + 34 * scaleX, obstacle.y + 8 * scaleY);
+                ctx.lineTo(obstacle.x + 31 * scaleX, obstacle.y + 9 * scaleY);
                 ctx.closePath();
                 ctx.fill();
                 
                 // Tail feathers
                 ctx.fillStyle = '#5d4037';
                 ctx.beginPath();
-                ctx.ellipse(obstacle.x + 2, obstacle.y + 12, 6, 3, 0.3, 0, Math.PI * 2);
+                ctx.ellipse(obstacle.x + 2 * scaleX, obstacle.y + 12 * scaleY, 6 * birdScale, 3 * birdScale, 0.3, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Realistic wing animation with clear wing shapes
-                const wingAngle = wingFlap * 0.8; // More pronounced flapping
+                // Wing animation (scaled)
+                const wingAngle = wingFlap * 0.8;
                 
-                // Left wing (top wing when viewed from side)
+                // Left wing
                 ctx.save();
-                ctx.translate(obstacle.x + 15, obstacle.y + 8);
+                ctx.translate(obstacle.x + 15 * scaleX, obstacle.y + 8 * scaleY);
                 ctx.rotate(wingAngle);
                 ctx.fillStyle = '#5d4037';
                 ctx.beginPath();
-                ctx.ellipse(0, 0, 12, 4, 0, 0, Math.PI * 2);
+                ctx.ellipse(0, 0, 12 * birdScale, 4 * birdScale, 0, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Wing details (primary feathers)
+                // Wing details
                 ctx.strokeStyle = '#4a2c2a';
-                ctx.lineWidth = 1;
+                ctx.lineWidth = 1 * birdScale;
                 ctx.beginPath();
-                ctx.moveTo(-8, -2);
-                ctx.lineTo(-12, -3);
-                ctx.moveTo(-6, -1);
-                ctx.lineTo(-10, -2);
-                ctx.moveTo(-4, 0);
-                ctx.lineTo(-8, -1);
+                ctx.moveTo(-8 * birdScale, -2 * birdScale);
+                ctx.lineTo(-12 * birdScale, -3 * birdScale);
+                ctx.moveTo(-6 * birdScale, -1 * birdScale);
+                ctx.lineTo(-10 * birdScale, -2 * birdScale);
+                ctx.moveTo(-4 * birdScale, 0);
+                ctx.lineTo(-8 * birdScale, -1 * birdScale);
                 ctx.stroke();
                 ctx.restore();
                 
-                // Right wing (bottom wing when viewed from side)
+                // Right wing
                 ctx.save();
-                ctx.translate(obstacle.x + 15, obstacle.y + 12);
+                ctx.translate(obstacle.x + 15 * scaleX, obstacle.y + 12 * scaleY);
                 ctx.rotate(-wingAngle);
                 ctx.fillStyle = '#6d4c41';
                 ctx.beginPath();
-                ctx.ellipse(0, 0, 12, 4, 0, 0, Math.PI * 2);
+                ctx.ellipse(0, 0, 12 * birdScale, 4 * birdScale, 0, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Wing details (primary feathers)
+                // Wing details
                 ctx.strokeStyle = '#5d4037';
-                ctx.lineWidth = 1;
+                ctx.lineWidth = 1 * birdScale;
                 ctx.beginPath();
-                ctx.moveTo(-8, 2);
-                ctx.lineTo(-12, 3);
-                ctx.moveTo(-6, 1);
-                ctx.lineTo(-10, 2);
-                ctx.moveTo(-4, 0);
-                ctx.lineTo(-8, 1);
+                ctx.moveTo(-8 * birdScale, 2 * birdScale);
+                ctx.lineTo(-12 * birdScale, 3 * birdScale);
+                ctx.moveTo(-6 * birdScale, 1 * birdScale);
+                ctx.lineTo(-10 * birdScale, 2 * birdScale);
+                ctx.moveTo(-4 * birdScale, 0);
+                ctx.lineTo(-8 * birdScale, 1 * birdScale);
                 ctx.stroke();
                 ctx.restore();
                 
                 // Update bird movement
                 obstacle.y += obstacle.vy;
-                obstacle.x -= gameSpeed * 0.8; // Birds move slightly slower
+                obstacle.x -= gameSpeed * 0.8;
                 
                 // Bounce off boundaries
-                if (obstacle.y <= 50 || obstacle.y >= 400) {
+                if (obstacle.y <= 50 * scaleY || obstacle.y >= 400 * scaleY) {
                     obstacle.vy *= -1;
                 }
             }
         }
         
         function drawBuildingWindows(buildingX, buildingY, buildingWidth, buildingHeight) {
-            const windowWidth = 8;
-            const windowHeight = 10;
-            const windowSpacingX = 12;
-            const windowSpacingY = 15;
+            const windowWidth = 8 * scaleX;
+            const windowHeight = 10 * scaleY;
+            const windowSpacingX = 12 * scaleX;
+            const windowSpacingY = 15 * scaleY;
             
-            for (let x = buildingX + 6; x < buildingX + buildingWidth - windowWidth; x += windowSpacingX) {
-                for (let y = buildingY + 10; y < buildingY + buildingHeight - windowHeight - 10; y += windowSpacingY) {
-                    // Fixed window colors based on position - no more random changing
+            for (let x = buildingX + 6 * scaleX; x < buildingX + buildingWidth - windowWidth; x += windowSpacingX) {
+                for (let y = buildingY + 10 * scaleY; y < buildingY + buildingHeight - windowHeight - 10 * scaleY; y += windowSpacingY) {
                     const windowIndex = Math.floor((x - buildingX) / windowSpacingX) + Math.floor((y - buildingY) / windowSpacingY);
                     let windowColor;
                     
                     if (windowIndex % 3 === 0) {
-                        windowColor = '#f1c40f'; // Yellow (lit)
+                        windowColor = '#f1c40f';
                     } else if (windowIndex % 3 === 1) {
-                        windowColor = '#ecf0f1'; // White (lit)
+                        windowColor = '#ecf0f1';
                     } else {
-                        windowColor = '#34495e'; // Dark (unlit)
+                        windowColor = '#34495e';
                     }
                     
                     ctx.fillStyle = windowColor;
                     ctx.fillRect(x, y, windowWidth, windowHeight);
                     
-                    // Window frame
                     ctx.strokeStyle = '#1a1a1a';
                     ctx.lineWidth = 1;
                     ctx.strokeRect(x, y, windowWidth, windowHeight);
@@ -478,15 +581,17 @@
         }
         
         function drawPackage(pkg) {
-            // Enhanced bright green glow effect
+            const pkgScale = Math.min(scaleX, scaleY);
+            
+            // Enhanced bright green glow effect (scaled)
             ctx.save();
             ctx.shadowColor = '#00ff88';
-            ctx.shadowBlur = 30;
+            ctx.shadowBlur = 30 * pkgScale;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
             
-            // Outer bright green glow ring - much brighter
-            const pulseSize = 5 + Math.sin(pkg.x * 0.1 + Date.now() * 0.005) * 3;
+            // Outer bright green glow ring
+            const pulseSize = (5 + Math.sin(pkg.x * 0.1 + Date.now() * 0.005) * 3) * pkgScale;
             ctx.fillStyle = 'rgba(0, 255, 136, 0.6)';
             ctx.beginPath();
             ctx.arc(pkg.x + pkg.width/2, pkg.y + pkg.height/2, pkg.width/2 + pulseSize, 0, Math.PI * 2);
@@ -495,13 +600,13 @@
             // Inner bright green glow
             ctx.fillStyle = 'rgba(46, 204, 113, 0.8)';
             ctx.beginPath();
-            ctx.arc(pkg.x + pkg.width/2, pkg.y + pkg.height/2, pkg.width/2 + 3, 0, Math.PI * 2);
+            ctx.arc(pkg.x + pkg.width/2, pkg.y + pkg.height/2, pkg.width/2 + 3 * pkgScale, 0, Math.PI * 2);
             ctx.fill();
             
             ctx.restore();
             
-            // 3D Package box with depth
-            const depth = 6;
+            // 3D Package box with depth (scaled)
+            const depth = 6 * pkgScale;
             
             // Top face of the box (3D effect)
             ctx.fillStyle = '#f39c12';
@@ -527,30 +632,30 @@
             ctx.fillStyle = '#e67e22';
             ctx.fillRect(pkg.x, pkg.y, pkg.width, pkg.height);
             
-            // Package tape on front face
+            // Package tape on front face (scaled)
             ctx.fillStyle = '#d35400';
-            ctx.fillRect(pkg.x, pkg.y + pkg.height/2 - 2, pkg.width, 4);
-            ctx.fillRect(pkg.x + pkg.width/2 - 2, pkg.y, 4, pkg.height);
+            ctx.fillRect(pkg.x, pkg.y + pkg.height/2 - 2 * scaleY, pkg.width, 4 * scaleY);
+            ctx.fillRect(pkg.x + pkg.width/2 - 2 * scaleX, pkg.y, 4 * scaleX, pkg.height);
             
             // Package tape on top face
             ctx.fillStyle = '#c0392b';
             ctx.beginPath();
-            ctx.moveTo(pkg.x + pkg.width/2 - 2, pkg.y);
-            ctx.lineTo(pkg.x + pkg.width/2 - 2 + depth, pkg.y - depth);
-            ctx.lineTo(pkg.x + pkg.width/2 + 2 + depth, pkg.y - depth);
-            ctx.lineTo(pkg.x + pkg.width/2 + 2, pkg.y);
+            ctx.moveTo(pkg.x + pkg.width/2 - 2 * scaleX, pkg.y);
+            ctx.lineTo(pkg.x + pkg.width/2 - 2 * scaleX + depth, pkg.y - depth);
+            ctx.lineTo(pkg.x + pkg.width/2 + 2 * scaleX + depth, pkg.y - depth);
+            ctx.lineTo(pkg.x + pkg.width/2 + 2 * scaleX, pkg.y);
             ctx.closePath();
             ctx.fill();
             
-            // Package label/address sticker
+            // Package label/address sticker (scaled)
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-            ctx.fillRect(pkg.x + 4, pkg.y + 4, pkg.width - 8, 8);
+            ctx.fillRect(pkg.x + 4 * scaleX, pkg.y + 4 * scaleY, pkg.width - 8 * scaleX, 8 * scaleY);
             
-            // Label text lines
+            // Label text lines (scaled)
             ctx.fillStyle = '#2c3e50';
-            ctx.fillRect(pkg.x + 6, pkg.y + 6, pkg.width - 12, 1);
-            ctx.fillRect(pkg.x + 6, pkg.y + 8, (pkg.width - 12) * 0.7, 1);
-            ctx.fillRect(pkg.x + 6, pkg.y + 10, (pkg.width - 12) * 0.5, 1);
+            ctx.fillRect(pkg.x + 6 * scaleX, pkg.y + 6 * scaleY, pkg.width - 12 * scaleX, 1 * scaleY);
+            ctx.fillRect(pkg.x + 6 * scaleX, pkg.y + 8 * scaleY, (pkg.width - 12 * scaleX) * 0.7, 1 * scaleY);
+            ctx.fillRect(pkg.x + 6 * scaleX, pkg.y + 10 * scaleY, (pkg.width - 12 * scaleX) * 0.5, 1 * scaleY);
             
             // Box edges/outlines for more definition
             ctx.strokeStyle = '#c0392b';
@@ -579,39 +684,39 @@
             let obstacle;
             
             if (type < 0.5) {
-                // Bottom-only skyscraper
-                const minHeight = 80;
-                const maxHeight = 250;
+                // Bottom-only skyscraper with increased height (scaled)
+                const minHeight = 120 * scaleY;
+                const maxHeight = 300 * scaleY;
                 const height = minHeight + Math.random() * (maxHeight - minHeight);
                 
                 obstacle = {
                     type: obstacleTypes.SKYSCRAPER,
-                    x: canvas.width,
-                    width: 60,
+                    x: canvasWidth,
+                    width: 60 * scaleX,
                     height: height,
                     passed: false
                 };
             } else if (type < 0.75) {
-                // Storm cloud
+                // Storm cloud (scaled)
                 obstacle = {
                     type: obstacleTypes.STORM_CLOUD,
-                    x: canvas.width,
-                    y: 100 + Math.random() * 200,
-                    width: 100,
-                    height: 60,
-                    vx: -1,
-                    vy: Math.random() > 0.5 ? 1 : -1,
+                    x: canvasWidth,
+                    y: 100 * scaleY + Math.random() * 200 * scaleY,
+                    width: 100 * scaleX,
+                    height: 60 * scaleY,
+                    vx: -1 * scaleX,
+                    vy: Math.random() > 0.5 ? 1 * scaleY : -1 * scaleY,
                     passed: false
                 };
             } else {
-                // Bird
+                // Bird (scaled)
                 obstacle = {
                     type: obstacleTypes.BIRD,
-                    x: canvas.width,
-                    y: 100 + Math.random() * 300,
-                    width: 35,
-                    height: 20,
-                    vy: (Math.random() - 0.5) * 2,
+                    x: canvasWidth,
+                    y: 100 * scaleY + Math.random() * 300 * scaleY,
+                    width: 35 * scaleX,
+                    height: 20 * scaleY,
+                    vy: (Math.random() - 0.5) * 2 * scaleY,
                     passed: false
                 };
             }
@@ -625,10 +730,10 @@
             if (now - lastPackageTime < 3000) return;
             
             packages.push({
-                x: canvas.width,
-                y: 150 + Math.random() * 300,
-                width: 25,
-                height: 25,
+                x: canvasWidth,
+                y: 150 * scaleY + Math.random() * 300 * scaleY,
+                width: 25 * scaleX,
+                height: 25 * scaleY,
                 collected: false
             });
             
@@ -637,7 +742,7 @@
         
         function checkCollisions() {
             // Ground and ceiling
-            if (drone.y <= 0 || drone.y + drone.height >= canvas.height) {
+            if (drone.y <= 0 || drone.y + drone.height >= canvasHeight) {
                 gameOver();
                 return;
             }
@@ -647,7 +752,7 @@
                 if (obstacle.type === obstacleTypes.SKYSCRAPER) {
                     if (drone.x < obstacle.x + obstacle.width && 
                         drone.x + drone.width > obstacle.x &&
-                        drone.y + drone.height > canvas.height - obstacle.height) {
+                        drone.y + drone.height > canvasHeight - obstacle.height) {
                         gameOver();
                         return;
                     }
@@ -684,13 +789,13 @@
                     pkg.collected = true;
                     score += 50;
                     
-                    // Create particles
+                    // Create particles (scaled)
                     for (let i = 0; i < 8; i++) {
                         particles.push({
                             x: pkg.x + pkg.width/2,
                             y: pkg.y + pkg.height/2,
-                            vx: (Math.random() - 0.5) * 6,
-                            vy: (Math.random() - 0.5) * 6,
+                            vx: (Math.random() - 0.5) * 6 * scaleX,
+                            vy: (Math.random() - 0.5) * 6 * scaleY,
                             life: 30,
                             color: '#2ecc71'
                         });
@@ -703,7 +808,7 @@
             if (!gameRunning) {
                 // Idle floating animation when game hasn't started
                 if (!gameStarted) {
-                    drone.y = 300 + Math.sin(Date.now() * 0.002) * 10;
+                    drone.y = 300 * scaleY + Math.sin(Date.now() * 0.002) * 10 * scaleY;
                     drone.rotation = Math.sin(Date.now() * 0.003) * 0.05;
                 }
                 return;
@@ -723,7 +828,7 @@
                         obstacle.x += obstacle.vx;
                         obstacle.y += obstacle.vy;
                         
-                        if (obstacle.y <= 50 || obstacle.y >= 300) {
+                        if (obstacle.y <= 50 * scaleY || obstacle.y >= 300 * scaleY) {
                             obstacle.vy *= -1;
                         }
                     }
@@ -761,37 +866,40 @@
             checkCollisions();
             
             // Increase game speed gradually
-            gameSpeed += 0.001;
+            gameSpeed += 0.001 * scaleX;
         }
         
         function drawParticles() {
             particles.forEach(particle => {
                 ctx.fillStyle = particle.color;
                 ctx.globalAlpha = particle.life / 30;
-                ctx.fillRect(particle.x, particle.y, 3, 3);
+                ctx.fillRect(particle.x, particle.y, 3 * Math.min(scaleX, scaleY), 3 * Math.min(scaleX, scaleY));
                 ctx.globalAlpha = 1;
             });
         }
         
         function draw() {
             // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+            
+            // Draw curved city background
+            drawCityBackground();
             
             // Draw start screen message
             if (!gameStarted) {
                 ctx.fillStyle = 'rgba(44, 62, 80, 0.8)';
-                ctx.fillRect(canvas.width/2 - 200, canvas.height/2 - 80, 400, 160);
+                ctx.fillRect(canvasWidth/2 - 200 * scaleX, canvasHeight/2 - 80 * scaleY, 400 * scaleX, 160 * scaleY);
                 
                 ctx.fillStyle = '#ecf0f1';
-                ctx.font = 'bold 32px Arial';
+                ctx.font = `bold ${32 * Math.min(scaleX, scaleY)}px Arial`;
                 ctx.textAlign = 'center';
-                ctx.fillText('DRONE DELIVERY DASH', canvas.width/2, canvas.height/2 - 30);
+                ctx.fillText('DRONE DELIVERY DASH', canvasWidth/2, canvasHeight/2 - 30 * scaleY);
                 
-                ctx.font = '18px Arial';
-                ctx.fillText('Press SPACE or TAP to start!', canvas.width/2, canvas.height/2 + 10);
+                ctx.font = `${18 * Math.min(scaleX, scaleY)}px Arial`;
+                ctx.fillText('Press SPACE or TAP to start!', canvasWidth/2, canvasHeight/2 + 10 * scaleY);
                 
-                ctx.font = '14px Arial';
-                ctx.fillText('Collect green packages • Avoid obstacles', canvas.width/2, canvas.height/2 + 40);
+                ctx.font = `${14 * Math.min(scaleX, scaleY)}px Arial`;
+                ctx.fillText('Collect green packages • Avoid obstacles', canvasWidth/2, canvasHeight/2 + 40 * scaleY);
             }
             
             // Draw game objects
@@ -815,6 +923,8 @@
             if (!gameStarted) {
                 gameStarted = true;
                 gameRunning = true;
+                // Hide mobile controls when game starts
+                document.getElementById('mobileControls').style.display = 'none';
                 return;
             }
             
@@ -833,11 +943,15 @@
             gameRunning = false;
             gameStarted = false;
             score = 0;
-            gameSpeed = 2;
+            gameSpeed = 2 * scaleX;
             
-            drone.x = 100;
-            drone.y = 300;
+            drone.x = 100 * scaleX;
+            drone.y = 300 * scaleY;
+            drone.width = 40 * scaleX;
+            drone.height = 30 * scaleY;
             drone.velocity = 0;
+            drone.gravity = 0.5 * scaleY;
+            drone.jumpPower = -8 * scaleY;
             drone.rotation = 0;
             
             obstacles = [];
@@ -848,10 +962,41 @@
             lastPackageTime = 0;
             
             document.getElementById('gameOver').style.display = 'none';
+            // Show mobile controls again
+            if (window.innerWidth <= 900) {
+                document.getElementById('mobileControls').style.display = 'block';
+            }
+            
+            // Regenerate city line for new game
+            generateCityLine();
+        }
+        
+        function initGame() {
+            resizeCanvas();
+            
+            // Reset drone properties with scaling
+            drone.x = 100 * scaleX;
+            drone.y = 300 * scaleY;
+            drone.width = 40 * scaleX;
+            drone.height = 30 * scaleY;
+            drone.velocity = 0;
+            drone.gravity = 0.5 * scaleY;
+            drone.jumpPower = -8 * scaleY;
+            drone.rotation = 0;
+            
+            gameSpeed = 2 * scaleX;
+            
+            generateCityLine();
+            gameLoop();
         }
         
         // Event listeners
         canvas.addEventListener('click', jump);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            jump();
+        });
+        
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
@@ -859,8 +1004,73 @@
             }
         });
         
-        // Start game
-        gameLoop();
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            
+            // Update drone properties with new scaling
+            const oldDroneX = drone.x / scaleX;  // Get relative position
+            const oldDroneY = drone.y / scaleY;
+            
+            // Recalculate scale factors
+            const container = canvas.parentElement;
+            const containerRect = container.getBoundingClientRect();
+            scaleX = containerRect.width / 800;
+            scaleY = containerRect.height / 600;
+            
+            // Update drone properties
+            drone.x = oldDroneX * scaleX;
+            drone.y = oldDroneY * scaleY;
+            drone.width = 40 * scaleX;
+            drone.height = 30 * scaleY;
+            drone.gravity = 0.5 * scaleY;
+            drone.jumpPower = -8 * scaleY;
+            
+            gameSpeed = 2 * scaleX;
+            
+            // Update existing obstacles and packages
+            obstacles.forEach(obstacle => {
+                if (obstacle.type === obstacleTypes.SKYSCRAPER) {
+                    obstacle.width = 60 * scaleX;
+                    obstacle.height = obstacle.height * (scaleY / (obstacle.height / (300 * scaleY))); // Maintain relative height
+                } else if (obstacle.type === obstacleTypes.STORM_CLOUD) {
+                    obstacle.width = 100 * scaleX;
+                    obstacle.height = 60 * scaleY;
+                } else if (obstacle.type === obstacleTypes.BIRD) {
+                    obstacle.width = 35 * scaleX;
+                    obstacle.height = 20 * scaleY;
+                }
+            });
+            
+            packages.forEach(pkg => {
+                pkg.width = 25 * scaleX;
+                pkg.height = 25 * scaleY;
+            });
+            
+            generateCityLine();
+        });
+        
+        // Start game when page loads
+        window.addEventListener('load', initGame);
+        
+        // Prevent scrolling on mobile
+        document.body.addEventListener('touchstart', e => {
+            if (e.target === canvas) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.body.addEventListener('touchend', e => {
+            if (e.target === canvas) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.body.addEventListener('touchmove', e => {
+            if (e.target === canvas) {
+                e.preventDefault();
+            }
+        }, { passive: false });
     </script>
 </body>
 </html>
