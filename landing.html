@@ -42,7 +42,7 @@
 
     .frame {
       width: 90%;
-      height: 40vh; /* Smaller so tip + footer are visible */
+      height: 60vh; /* bigger to fit game when it loads */
       max-width: 800px;
       margin: 20px auto;
       border: 2px solid #333;
@@ -73,6 +73,7 @@
       text-decoration: none;
       font-weight: bold;
       transition: 0.3s;
+      cursor: pointer;
     }
 
     .button:hover {
@@ -93,18 +94,22 @@
     <p>Deliver packages, dodge obstacles, and explore the power of AI-built products.</p>
   </header>
 
-  <div class="frame">
-    <!-- Option 1: Use screenshot -->
+  <div class="frame" id="game-frame">
+    <!-- Show screenshot initially -->
     <img src="cover.png" alt="Game Screenshot">
-
-    <!-- Option 2: Embed game directly (replace above img with this) -->
-    <!-- <iframe src="game.html"></iframe> -->
   </div>
 
-  <a href="game.html" target="_blank" class="button">Play Now</a>
+  <button class="button" onclick="loadGame()">Play Now</button>
 
   <footer>
     © 2024 kirangosavi26 • Built with AI
   </footer>
+
+  <script>
+    function loadGame() {
+      const frame = document.getElementById("game-frame");
+      frame.innerHTML = '<iframe src="game.html"></iframe>';
+    }
+  </script>
 </body>
 </html>
