@@ -885,22 +885,45 @@
             // Draw curved city background
             drawCityBackground();
             
-            // Draw start screen message
-            if (!gameStarted) {
-                ctx.fillStyle = 'rgba(44, 62, 80, 0.8)';
-                ctx.fillRect(canvasWidth/2 - 200 * scaleX, canvasHeight/2 - 80 * scaleY, 400 * scaleX, 160 * scaleY);
-                
-                ctx.fillStyle = '#ecf0f1';
-                ctx.font = `bold ${32 * Math.min(scaleX, scaleY)}px Arial`;
-                ctx.textAlign = 'center';
-                ctx.fillText('DRONE DELIVERY DASH', canvasWidth/2, canvasHeight/2 - 30 * scaleY);
-                
-                ctx.font = `${18 * Math.min(scaleX, scaleY)}px Arial`;
-                ctx.fillText('Press SPACE or TAP to start!', canvasWidth/2, canvasHeight/2 + 10 * scaleY);
-                
-                ctx.font = `${14 * Math.min(scaleX, scaleY)}px Arial`;
-                ctx.fillText('Collect green packages • Avoid obstacles', canvasWidth/2, canvasHeight/2 + 40 * scaleY);
-            }
+// Draw start screen message
+if (!gameStarted) {
+    // Make box wider and taller to fit the text properly
+    ctx.fillStyle = 'rgba(44, 62, 80, 0.8)';
+    ctx.fillRect(canvasWidth/2 - 280 * scaleX, canvasHeight/2 - 60 * scaleY, 560 * scaleX, 120 * scaleY);
+    
+    // Instructions text with outline and shadow
+    ctx.font = `bold ${22 * Math.min(scaleX, scaleY)}px Arial`;
+    ctx.textAlign = 'center';
+    
+    // Shadow for instructions
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillText('Collect Green Packages, Avoid Obstacles', canvasWidth/2 + 2 * scaleX, canvasHeight/2 - 15 * scaleY + 2 * scaleY);
+    
+    // Black outline for instructions
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3 * Math.min(scaleX, scaleY);
+    ctx.strokeText('Collect Green Packages, Avoid Obstacles', canvasWidth/2, canvasHeight/2 - 15 * scaleY);
+    
+    // Main instructions text
+    ctx.fillStyle = '#f1c40f'; // Bright yellow
+    ctx.fillText('Collect Green Packages, Avoid Obstacles', canvasWidth/2, canvasHeight/2 - 15 * scaleY);
+    
+    // Start prompt text with outline and shadow
+    ctx.font = `bold ${18 * Math.min(scaleX, scaleY)}px Arial`;
+    
+    // Shadow for start prompt
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillText('Press SPACE or TAP to start!', canvasWidth/2 + 2 * scaleX, canvasHeight/2 + 25 * scaleY + 2 * scaleY);
+    
+    // Black outline for start prompt
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3 * Math.min(scaleX, scaleY);
+    ctx.strokeText('Press SPACE or TAP to start!', canvasWidth/2, canvasHeight/2 + 25 * scaleY);
+    
+    // Main start prompt text
+    ctx.fillStyle = '#e74c3c'; // Bright red
+    ctx.fillText('Press SPACE or TAP to start!', canvasWidth/2, canvasHeight/2 + 25 * scaleY);
+}
             
             // Draw game objects
             drawDrone();
