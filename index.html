@@ -884,12 +884,28 @@
             
             // Draw curved city background
             drawCityBackground();
-            
-// Draw start screen message
+
+       // Draw start screen message
 if (!gameStarted) {
-    // Make box wider and taller to fit the text properly
+    ctx.font = `bold ${20 * Math.min(scaleX, scaleY)}px Arial`;
+    ctx.textAlign = 'center';
+    
+    // Shadow for title
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillText('Rules', canvasWidth/2 + 2 * scaleX, canvasHeight/2 - 90 * scaleY + 2 * scaleY);
+    
+    // Black outline for title
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2.2 * Math.min(scaleX, scaleY);
+    ctx.strokeText('Rules', canvasWidth/2, canvasHeight/2 - 90 * scaleY);
+    
+    // Main title text
+    ctx.fillStyle = '#f1c40f'; // Bright yellow for title
+    ctx.fillText('Rules', canvasWidth/2, canvasHeight/2 - 90 * scaleY);
+    
+    // Make box slightly shorter in width, keep height the same
     ctx.fillStyle = 'rgba(44, 62, 80, 0.8)';
-    ctx.fillRect(canvasWidth/2 - 280 * scaleX, canvasHeight/2 - 60 * scaleY, 560 * scaleX, 120 * scaleY);
+    ctx.fillRect(canvasWidth/2 - 250 * scaleX, canvasHeight/2 - 60 * scaleY, 500 * scaleX, 120 * scaleY);
     
     // Instructions text with outline and shadow
     ctx.font = `bold ${22 * Math.min(scaleX, scaleY)}px Arial`;
